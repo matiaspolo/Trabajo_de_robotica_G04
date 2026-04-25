@@ -1,0 +1,78 @@
+/*************************************************
+ * CONTROL MOTOR BASE CON LIMITES POR SENTIDO
+ * ESP32 – Arduino Core 3.x
+ *************************************************/
+
+// -------- PINES --------
+#define POT_PIN 34
+
+#define IN1 18
+#define IN2 19
+#define ENA 23
+
+// -------- LIMITES --------
+#define POS_MAX 4000
+#define POS_MIN 2000
+
+// -------- PWM --------
+#define PWM_FREQ 1000
+#define PWM_RES 8
+#define PWM_SPEED 120
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+
+  ledcAttach(ENA, PWM_FREQ, PWM_RES);
+  analogReadResolution(12);
+
+  detenerMotor();
+}
+
+void loop() {
+
+  int posicion = analogRead(POT_PIN);
+  posicion = constrain(posicion, 0, 4095);
+
+  Serial.println(posicion);
+
+  // EJEMPLO: forzamos giro antihorario
+  moverAntihorario(posicion);
+
+  delay(20);
+}
+
+// -------- FUNCIONES --------
+
+// ===== SENTIDO ANTIHORARIO =====
+void moverAntihorario(int posicionActual) {
+
+  // ❌ Bloqueo por límite
+  if (posicionActual >= POS_MAX || posicionActual <= POS_MIN) {
+    detenerMotor();
+    return;
+  }
+
+  // ✅ Permitido girar
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  ledcWrite(ENA, PWM_SPEED);
+}
+
+// ===== SENTIDO HORARIO =====
+void moverHorario(int posicionActual) {
+
+  // (si quieres, aquí puedes poner otros límites)
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  ledcWrite(ENA, PWM_SPEED);
+}
+
+// ===== PARADA =====
+void detenerMotor() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  ledcWrite(ENA, 0);
+}
