@@ -1,0 +1,110 @@
+/*************************************************
+ * CONTROL MOTOR BASE CON PID DE POSICION
+ * 1 POTENCIOMETRO + LIMITES + REDIRECCION
+ * ESP32 – Arduino Core 3.x
+ *************************************************/
+
+// -------- PINES --------
+#define POT_PIN 34
+
+#define IN1 18
+#define IN2 19
+#define ENA 23
+
+// -------- LIMITES --------
+#define POS_MAX 4000
+#define POS_MIN 3000
+#define MARGEN_LIMITE 40
+
+// -------- PWM --------
+#define PWM_FREQ 1000
+#define PWM_RES 8
+#define PWM_MIN 80
+#define PWM_MAX 180
+
+// -------- PID --------
+float Kp = 0.37;
+float Ki = 0.0003;
+float Kd = 0.06;
+
+float error = 0;
+float errorPrevio = 0;
+float integral = 0;
+
+// -------- ESTADO --------
+int direccion = 1; // 1=subir, -1=bajar
+
+unsigned long tPrev = 0;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+
+  ledcAttach(ENA, PWM_FREQ, PWM_RES);
+  analogReadResolution(12);
+
+  tPrev = millis();
+}
+
+void loop() {
+
+  int posicion = analogRead(POT_PIN);
+  unsigned long tActual = millis();
+  float dt = (tActual - tPrev) / 1000.0;
+  tPrev = tActual;
+
+  // -------- REDIRECCION EN LIMITES --------
+  if (posicion >= POS_MAX - MARGEN_LIMITE) {
+    direccion = -1;
+    integral = 0;   // anti-windup
+  }
+  if (posicion <= POS_MIN + MARGEN_LIMITE) {
+    direccion = 1;
+    integral = 0;
+  }
+
+  // -------- OBJETIVO INTERNO --------
+  int objetivo;
+  if (direccion == 1) {
+    objetivo = POS_MAX - MARGEN_LIMITE;
+  } else {
+    objetivo = POS_MIN + MARGEN_LIMITE;
+  }
+
+  // -------- PID --------
+  error = objetivo - posicion;
+  integral += error * dt;
+  float derivada = (error - errorPrevio) / dt;
+  errorPrevio = error;
+
+  float salida = Kp * error + Ki * integral + Kd * derivada;
+
+  // Magnitud PWM
+  int pwm = abs((int)salida);
+  pwm = constrain(pwm, PWM_MIN, PWM_MAX);
+
+  // -------- APLICAR SALIDA --------
+  if (salida > 0) {
+    // Subir
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    ledcWrite(ENA, pwm);
+  } else {
+    // Bajar
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+    ledcWrite(ENA, pwm);
+  }
+
+  // -------- DEBUG --------
+  Serial.print("Pos: ");
+  Serial.print(posicion);
+  Serial.print(" Obj: ");
+  Serial.print(objetivo);
+  Serial.print(" PWM: ");
+  Serial.println(pwm);
+
+  delay(10);
+}
