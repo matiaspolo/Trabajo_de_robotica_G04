@@ -1,0 +1,136 @@
+/*************************************************
+ * MOTOR 2 - PID A <-> B (SENTIDO CORREGIDO)
+ * ESP32 – Arduino Core 3.x
+ *************************************************/
+
+// -------- PINES --------
+#define POT_PIN 35
+
+#define IN3 25
+#define IN4 26
+#define ENB 27
+
+// -------- POSICIONES --------
+#define POS_A 0
+#define POS_B 400
+#define TOLERANCIA 3
+
+// -------- PWM --------
+#define PWM_FREQ 1000
+#define PWM_RES 8
+#define PWM_MIN 150
+#define PWM_MAX 200
+
+// -------- PID --------
+float Kp = 0.7;
+float Ki = 0;
+float Kd = 0.25;
+
+float error, errorPrev, integral;
+
+// -------- FILTRADO --------
+float posFiltrada = 0;
+
+// -------- ESTADOS --------
+enum Estado { IR_A, IR_B, PARADO };
+Estado estado = IR_B;          // empieza yendo a B
+Estado siguienteEstado = IR_A;
+
+unsigned long tPrev = 0;
+unsigned long tParado = 0;
+const unsigned long TIEMPO_PARADO = 300;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  ledcAttach(ENB, PWM_FREQ, PWM_RES);
+  analogReadResolution(12);
+
+  posFiltrada = analogRead(POT_PIN);
+  tPrev = millis();
+
+  detenerMotor();
+}
+
+void loop() {
+
+  // -------- LECTURA --------
+  int posRaw = analogRead(POT_PIN);
+  posFiltrada = 0.5 * posFiltrada + 0.5 * posRaw;
+  posFiltrada = constrain(posFiltrada, POS_A, POS_B);
+
+  unsigned long ahora = millis();
+  float dt = (ahora - tPrev) / 1000.0;
+  if (dt <= 0) dt = 0.01;
+  tPrev = ahora;
+
+  int objetivo;
+
+  // -------- MAQUINA DE ESTADOS --------
+  switch (estado) {
+
+    case IR_B:
+      objetivo = POS_B;
+      siguienteEstado = IR_A;
+      break;
+
+    case IR_A:
+      objetivo = POS_A;
+      siguienteEstado = IR_B;
+      break;
+
+    case PARADO:
+      detenerMotor();
+      if (ahora - tParado > TIEMPO_PARADO) {
+        estado = siguienteEstado;
+      }
+      return;
+  }
+
+  // -------- ERROR --------
+  error = objetivo - posFiltrada;
+
+  // ✅ LLEGADA
+  if (abs(error) <= TOLERANCIA) {
+    detenerMotor();
+    integral = 0;
+    errorPrev = 0;
+    estado = PARADO;
+    tParado = ahora;
+    return;
+  }
+
+  // -------- PID --------
+  integral += error * dt;
+  float derivada = (error - errorPrev) / dt;
+  errorPrev = error;
+
+  float salida = Kp * error + Ki * integral + Kd * derivada;
+
+  int pwm = abs((int)salida);
+  pwm = constrain(pwm, PWM_MIN, PWM_MAX);
+
+  // -------- SENTIDO CORREGIDO --------
+  if (salida > 0) {
+    // ahora este sentido es el correcto
+    digitalWrite(IN3, LOW);
+    digitalWrite(IN4, HIGH);
+  } else {
+    digitalWrite(IN3, HIGH);
+    digitalWrite(IN4, LOW);
+  }
+
+  ledcWrite(ENB, pwm);
+
+  delay(10);
+}
+
+// -------- PARADA --------
+void detenerMotor() {
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  ledcWrite(ENB, 0);
+}
