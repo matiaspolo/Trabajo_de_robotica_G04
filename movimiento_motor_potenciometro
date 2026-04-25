@@ -1,0 +1,84 @@
+/*************************************************
+ * MOTOR BASE: MOVIMIENTO AUTOMATICO CON REBOTE
+ * 1 POTENCIOMETRO + LIMITES + REDIRECCION
+ * ESP32 – Arduino Core 3.x
+ *************************************************/
+
+// -------- PINES --------
+#define POT_PIN 34   // Potenciómetro de posición
+
+#define IN1 18
+#define IN2 19
+#define ENA 23
+
+// -------- LIMITES --------
+#define POS_MAX 4000
+#define POS_MIN 2000
+#define MARGEN_LIMITE 40
+
+// -------- PWM --------
+#define PWM_FREQ 1000
+#define PWM_RES 8
+#define PWM_SPEED 120
+
+// -------- ESTADO --------
+int direccion = 1;  
+//  1 = subir (antihorario)
+// -1 = bajar (horario)
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+
+  ledcAttach(ENA, PWM_FREQ, PWM_RES);
+  analogReadResolution(12);
+
+  detenerMotor();
+}
+
+void loop() {
+
+  int posicion = analogRead(POT_PIN);
+  Serial.println(posicion);
+
+  // ---------- LIMITE SUPERIOR ----------
+  if (posicion >= POS_MAX - MARGEN_LIMITE) {
+    direccion = -1;   // cambiar a bajar
+  }
+
+  // ---------- LIMITE INFERIOR ----------
+  if (posicion <= POS_MIN + MARGEN_LIMITE) {
+    direccion = 1;    // cambiar a subir
+  }
+
+  // ---------- MOVER SEGUN DIRECCION ----------
+  if (direccion == 1) {
+    moverAntihorario();
+  } else {
+    moverHorario();
+  }
+
+  delay(10);
+}
+
+// -------- MOVIMIENTOS --------
+
+void moverAntihorario() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  ledcWrite(ENA, PWM_SPEED);
+}
+
+void moverHorario() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  ledcWrite(ENA, PWM_SPEED);
+}
+
+void detenerMotor() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  ledcWrite(ENA, 0);
+}
