@@ -1,0 +1,107 @@
+#include <Arduino.h>
+
+// =================================================
+// =============== SERVO GRANDE (80 KG) =============
+// =================================================
+#define SERVO_GRANDE_PIN 33
+#define SERVO_FREQ 50
+#define SERVO_RES 16
+
+// Ajusta a tu mecánica
+#define SERVO_GRANDE_SUBIR 650
+#define SERVO_GRANDE_BAJAR 2200
+#define SERVO_GRANDE_HOME 1500
+
+// =================================================
+// =============== SERVO POLEA =====================
+// =================================================
+#define SERVO_POLEA_PIN 13
+
+// RANGO AMPLIO → más cuerda
+#define POLEA_MIN 2400   // recoge MUCHÍSIMA cuerda
+#define POLEA_MAX 600    // suelta MUCHÍSIMA cuerda
+
+// Velocidad / recorrido
+#define POLEA_PASO_US   40
+#define POLEA_DELAY_MS 15
+
+// =================================================
+// =============== UTILIDAD ========================
+// =================================================
+uint32_t dutyFromUs(uint32_t us) {
+  return (uint32_t)((us / 20000.0) * ((1 << SERVO_RES) - 1));
+}
+
+// =================================================
+// =============== VARIABLES =======================
+// =================================================
+int poleaPos = SERVO_GRANDE_HOME;  // arrancamos en HOME
+enum Estado { EN_HOME, SUBIENDO, BAJANDO };
+Estado estado = EN_HOME;
+
+// =================================================
+// ================= SETUP =========================
+// =================================================
+void setup() {
+  Serial.begin(115200);
+
+  Serial.println("S -> SUBIR");
+  Serial.println("B -> BAJAR");
+  Serial.println("H -> HOME");
+
+  // Servos
+  ledcAttach(SERVO_GRANDE_PIN, SERVO_FREQ, SERVO_RES);
+  ledcAttach(SERVO_POLEA_PIN, SERVO_FREQ, SERVO_RES);
+
+  // Arranque en HOME
+  ledcWrite(SERVO_GRANDE_PIN, dutyFromUs(SERVO_GRANDE_HOME));
+  poleaPos = 1500;
+  ledcWrite(SERVO_POLEA_PIN, dutyFromUs(poleaPos));
+}
+
+// =================================================
+// ================= LOOP ==========================
+// =================================================
+void loop() {
+
+  // -------- COMANDOS TECLADO --------
+  if (Serial.available()) {
+    char c = Serial.read();
+
+    if (c == 'S' || c == 's') {
+      Serial.println("SUBIENDO");
+      estado = SUBIENDO;
+      ledcWrite(SERVO_GRANDE_PIN, dutyFromUs(SERVO_GRANDE_SUBIR));
+    }
+
+    if (c == 'B' || c == 'b') {
+      Serial.println("BAJANDO");
+      estado = BAJANDO;
+      ledcWrite(SERVO_GRANDE_PIN, dutyFromUs(SERVO_GRANDE_BAJAR));
+    }
+
+    if (c == 'H' || c == 'h') {
+      Serial.println("HOME");
+      estado = EN_HOME;
+      ledcWrite(SERVO_GRANDE_PIN, dutyFromUs(SERVO_GRANDE_HOME));
+      poleaPos = 1500;
+      ledcWrite(SERVO_POLEA_PIN, dutyFromUs(poleaPos));
+    }
+  }
+
+  // -------- MOVIMIENTO SERVO POLEA --------
+
+  // SUBIENDO → recoger cuerda
+  if (estado == SUBIENDO && poleaPos > POLEA_MIN) {
+    poleaPos -= POLEA_PASO_US;
+    ledcWrite(SERVO_POLEA_PIN, dutyFromUs(poleaPos));
+    delay(POLEA_DELAY_MS);
+  }
+
+  // BAJANDO → soltar cuerda
+  if (estado == BAJANDO && poleaPos < POLEA_MAX) {
+    poleaPos += POLEA_PASO_US;
+    ledcWrite(SERVO_POLEA_PIN, dutyFromUs(poleaPos));
+    delay(POLEA_DELAY_MS);
+  }
+}
